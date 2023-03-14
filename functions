@@ -1,26 +1,61 @@
-CREATE_BACKUP_GRUB_CONFIG() {
-	read -p "Create a copy of the current settings before the change? {Saved in /home directory} (yes,no): " BACKUP_RESPONSE
-	if [ $BACKUP_RESPONSE = yes ]; then
-		if cp -i /etc/default/grub /home; then
-			echo Backup in current directory successfully saved.. 			# Создание бекапа текущей конфигурации
-		else
-			echo Something went wrong...
+CONFIG_GRUB_PATH=/etc/default/grub # Путь к конфигурационному файлу		
+
+
+# Проверка на то, запускается ли скрипт от рута
+CHECK_ROOT() {
+	if [ $(id -u) -ne 0 ]; then
+		echo You must be a superuser to use cfgrub.
+		exit 1
 	fi
-fi
 }
 
 
+# Создание бекапа текущего файла конфигурации.
+# Место расположения бекапа - на выбор.
+# Имя бекапа - на выбор.
+CREATE_BACKUP_GRUB_CONFIG() {
+	read -p "Enter the full path where to save the backup: " BACKUP_LOCATION
+	read -p "Backup name: " BACKUP_NAME
+
+	if cp -ip /etc/default/grub $BACKUP_LOCATION 2>/dev/null; then
+		mv $BACKUP_LOCATION/grub $BACKUP_LOCATION/$BACKUP_NAME
+		echo Backup successfully saved.. 			
+	else
+		echo "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+		echo "\nBackup creation aborted due to an error: no such directory\n"
+		echo "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+	fi
+}
+
+
+# Использование бекапа как основного конфигурационного файла
+USE_BACKUP() {
+	read -p "Enter backup name: " BACKUP_NAME
+	local BACKUP_NAME_LENGTH=$(echo $BACKUP_NAME | wc -m )
+	local BACKUP_LOCATION=$(find / -type f -name "$BACKUP_NAME" 2>/dev/null | rev | cut -c $BACKUP_NAME_LENGTH- | rev)
+	rm /etc/default/grub
+
+	mv $BACKUP_LOCATION/$BACKUP_NAME /etc/default/
+	cp -p /etc/default/$BACKUP_NAME $BACKUP_LOCATION
+
+	mv /etc/default/$BACKUP_NAME /etc/default/grub
+}
+
+
+# Вывод текущей версии GRUB
 PRINT_GRUB_VERSION() {
 	local CURRENT_GRUB_VERSION=$(grub-install --version | cut -d' ' -f3 | cut -c -4)		# Вывод текущей версии GRUB
 	echo "Current version of GRUB: $CURRENT_GRUB_VERSION"
 }
 
 
+# Вывод текущей конфигурации GRUB
 PRINT_CURRENT_CONFIGURATION() {
 	cat /etc/default/grub | grep -v \# | cat -s
 }
 
 
+# Установка значения пункта выбора точки загрузки по умолчанию
 SET_DOWNLOAD_POINT() {
 	local GRUB_DEFAULT_CURRENT=$(grep -i GRUB_DEFAULT ${CONFIG_GRUB_PATH})
 
@@ -30,6 +65,7 @@ SET_DOWNLOAD_POINT() {
 }
 
 
+# Установка длительности ожидания выбора пункта меню от пользователя 
 SET_TIMEOUT() {
 	local GRUB_TIMEOUT_CURRENT=$(grep -iw GRUB_TIMEOUT ${CONFIG_GRUB_PATH})
 
@@ -39,6 +75,7 @@ SET_TIMEOUT() {
 }
 
 
+# Установка разрешения фонового изображения загрузчика
 SET_GFXMODE() {
 	local GRUB_GFXMODE_CURRENT=$(grep -i GRUB_GFXMODE ${CONFIG_GRUB_PATH})			# Все текущие значения параметров конфигурации
 
@@ -48,10 +85,11 @@ SET_GFXMODE() {
 }
 
 
+# Установить разрешение на отображение пунктов "режима восстановления"
 SET_GRUB_DISABLE_RECOVERY() {
 	local GRUB_DISABLE_RECOVERY_CURRENT=$(grep -i GRUB_DISABLE_RECOVERY ${CONFIG_GRUB_PATH})
 
-	read -p "Give the ability to enter GRUB at system startup? (yes,no) " GRUB_DISABLE_RECOVERY_RESPONSE
+	read -p "Show \"recovery mode\" item in the menu? (yes,no) " GRUB_DISABLE_RECOVERY_RESPONSE
 
 	if [ $GRUB_DISABLE_RECOVERY_RESPONSE = yes ]; then
 		sed -i "s/$GRUB_DISABLE_RECOVERY_CURRENT/GRUB_DISABLE_RECOVERY=false/g" ${CONFIG_GRUB_PATH}
@@ -61,22 +99,23 @@ SET_GRUB_DISABLE_RECOVERY() {
 }
 
 
-# Set GRUB background image
+# Установка фонового изображения загрузчика
 SET_GRUB_BACKGROUND() {
 	local GRUB_BACKGROUND_CURRENT=$(grep -i GRUB_BACKGROUND ${CONFIG_GRUB_PATH} | sed 's_\/_\\\/_g')
 
-	read -p "Enter the full path to the image for GRUB: " FULL_IMAGE_PATH
+	read -p "Enter the full path to the image for GRUB: " FULL_IMAGE_PATH 
 	
 	FULL_IMAGE_PATH=$(echo $FULL_IMAGE_PATH | sed 's_\/_\\\/_g')
 	
 	if grep -q GRUB_BACKGROUND ${CONFIG_GRUB_PATH}; then
 		sed -i "s/$GRUB_BACKGROUND_CURRENT/GRUB_BACKGROUND=$FULL_IMAGE_PATH/g" ${CONFIG_GRUB_PATH}
 	else
-		echo "GRUB_BACKGROUND=$FULL_IMAGE_PATH" >> ${CONFIG_GRUB_PATH}
+		echo "\nGRUB_BACKGROUND=$FULL_IMAGE_PATH" | sed 's_\\\/_\/_g' >> ${CONFIG_GRUB_PATH}
 	fi
 }
 
 
+# Установка видимости сообщений ядра и логотипа дистрибутива при запуске
 SET_KERNEL_MESSG_AND_LOGO() {
 	local GRUB_CMDLINE_LINUX_DEFAULT_CURRENT=$(grep -i GRUB_CMDLINE_LINUX_DEFAULT ${CONFIG_GRUB_PATH})
 

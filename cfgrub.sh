@@ -1,6 +1,6 @@
 #AUTHOR
 #	Written by Samir Kasumov.
-#        Version 1.2
+#        Version 1.3
 
 #REPORTING BUGS
 #	Report any bugs to https://vk.com/samir_kasumov
@@ -11,28 +11,40 @@
 
 #/usr/bin/env bash
 
-. ./functions
+. ./functions														
 
+CHECK_ROOT
 
-CONFIG_GRUB_PATH=/etc/default/grub # Путь к конфигурационному файлу																
+echo "
+            __                  _      __     __            _             
+       ___ / _| __ _ _ __ _   _| |__   \ \   / /__ _ __ ___(_) ___  _ __  
+      / __| |_ / _\` | '__| | | | '_ \   \ \ / / _ \ '__/ __| |/ _ \| '_ \ 
+     | (__|  _| (_| | |  | |_| | |_) |   \ V /  __/ |  \__ \ | (_) | | | |
+      \___|_|  \__, |_|   \__,_|_.__/     \_/ \___|_|  |___/_|\___/|_| |_|
+               |___/                                                      
+                                   _   _____ 
+                                  / | |___ / 
+                                  | |   |_ \ 
+                                  | |_ ___) |
+                                  |_(_)____/ 
+"
 
 
 PRINT_GRUB_VERSION
-
-
-CREATE_BACKUP_GRUB_CONFIG
 
 
 cat << EOF
 1. Change download point
 2. Change timeout for user action
 3. Change screen resolution
-4. Change GRUB login permission
+4. Change show "recovery mode" items
 5. Change background image
 6. Change display of kernel messages and distribution logo
 7. Interactive mode with a pass through all items
 8. Show current configuration
-9. Exit
+9. Сreate a configuration backup
+10. Use a backup to replace the current configuration
+11. Exit
 EOF
 
 
@@ -70,7 +82,13 @@ case $MENU_RESPONSE in
 		PRINT_CURRENT_CONFIGURATION
 		exit 0
 		;;
-	9)  
+	9)
+		CREATE_BACKUP_GRUB_CONFIG
+		;;
+	10)
+		USE_BACKUP
+		;;
+	11)  
 		echo Stoppage...
 		exit 0
 	    ;;

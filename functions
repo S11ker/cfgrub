@@ -1,6 +1,23 @@
 CONFIG_GRUB_PATH=/etc/default/grub # Путь к конфигурационному файлу		
 
 
+SHOW_MENU() {
+	cat << EOF
+1. Change boot point
+2. Change timeout for user action
+3. Change screen resolution
+4. Change show "recovery mode" items
+5. Change background image
+6. Change display of kernel messages and distribution logo
+7. Interactive mode with a pass through all items
+8. Show current configuration
+9. Сreate a configuration backup
+10. Use a backup to replace the current configuration
+11. Exit
+EOF
+}
+
+
 # Проверка на то, запускается ли скрипт от рута
 CHECK_ROOT() {
 	if [ $(id -u) -ne 0 ]; then
@@ -17,13 +34,16 @@ CREATE_BACKUP_GRUB_CONFIG() {
 	read -p "Enter the full path where to save the backup: " BACKUP_LOCATION
 	read -p "Backup name: " BACKUP_NAME
 
-	if cp -ip /etc/default/grub $BACKUP_LOCATION 2>/dev/null; then
-		mv $BACKUP_LOCATION/grub $BACKUP_LOCATION/$BACKUP_NAME
-		echo Backup successfully saved.. 			
+	if cp -ip /etc/default/grub $BACKUP_LOCATION && mv $BACKUP_LOCATION/grub $BACKUP_LOCATION/$BACKUP_NAME; then
+		echo Backup successfully saved.. 	
 	else
-		echo "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-		echo "\nBackup creation aborted due to an error: no such directory\n"
-		echo "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+
+cat << EOF
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Backup creation aborted due to an error.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+EOF
+		exit 1;
 	fi
 }
 
@@ -33,19 +53,23 @@ USE_BACKUP() {
 	read -p "Enter backup name: " BACKUP_NAME
 	local BACKUP_NAME_LENGTH=$(echo $BACKUP_NAME | wc -m )
 	local BACKUP_LOCATION=$(find / -type f -name "$BACKUP_NAME" 2>/dev/null | rev | cut -c $BACKUP_NAME_LENGTH- | rev)
-	rm /etc/default/grub
 
-	mv $BACKUP_LOCATION/$BACKUP_NAME /etc/default/
-	cp -p /etc/default/$BACKUP_NAME $BACKUP_LOCATION
-
-	mv /etc/default/$BACKUP_NAME /etc/default/grub
+	if mv $BACKUP_LOCATION/$BACKUP_NAME /etc/default/ 2>/dev/null; then
+		rm /etc/default/grub
+		
+		cp -p /etc/default/$BACKUP_NAME $BACKUP_LOCATION
+		mv /etc/default/$BACKUP_NAME /etc/default/grub
+	else
+		echo File does not exist
+		exit 1;
+	fi
 }
 
 
 # Вывод текущей версии GRUB
 PRINT_GRUB_VERSION() {
 	local CURRENT_GRUB_VERSION=$(grub-install --version | cut -d' ' -f3 | cut -c -4)		# Вывод текущей версии GRUB
-	echo "Current version of GRUB: $CURRENT_GRUB_VERSION"
+	echo "Current version of GRUB: $CURRENT_GRUB_VERSION\n"
 }
 
 
@@ -56,10 +80,10 @@ PRINT_CURRENT_CONFIGURATION() {
 
 
 # Установка значения пункта выбора точки загрузки по умолчанию
-SET_DOWNLOAD_POINT() {
+SET_BOOT_POINT() {
 	local GRUB_DEFAULT_CURRENT=$(grep -i GRUB_DEFAULT ${CONFIG_GRUB_PATH})
 
-	read -p "Specify the number of the loading point or \"saved\": " GRUB_DEFAULT_RESPONSE
+	read -p "Specify the number of the boot point or \"saved\": " GRUB_DEFAULT_RESPONSE
 
 	sed -i "s/$GRUB_DEFAULT_CURRENT/GRUB_DEFAULT=$GRUB_DEFAULT_RESPONSE/g" ${CONFIG_GRUB_PATH}
 }
@@ -71,17 +95,36 @@ SET_TIMEOUT() {
 
 	read -p "Enter the time in seconds before the system boots if nothing is selected from the menu : " GRUB_TIMEOUT_RESPONSE
 
-	sed -iw "s/$GRUB_TIMEOUT_CURRENT/GRUB_TIMEOUT=$GRUB_TIMEOUT_RESPONSE/g" ${CONFIG_GRUB_PATH}
+	if [ $(echo $GRUB_TIMEOUT_RESPONSE | tr -d [:digit:] | wc -m) -eq 1 ]; then
+		sed -iw "s/$GRUB_TIMEOUT_CURRENT/GRUB_TIMEOUT=$GRUB_TIMEOUT_RESPONSE/g" ${CONFIG_GRUB_PATH}
+	else
+		echo You entered something other than numbers.
+		exit 1;
+	fi
 }
 
 
 # Установка разрешения фонового изображения загрузчика
 SET_GFXMODE() {
 	local GRUB_GFXMODE_CURRENT=$(grep -i GRUB_GFXMODE ${CONFIG_GRUB_PATH})			# Все текущие значения параметров конфигурации
+	echo $GRUB_GFXMODE_CURRENT
+	read -p "Enter the screen resolution of the bootloader with an x between two numbers: " GRUB_GFXMODE_RESPONSE
 
-	read -p "Enter the screen resolution of the bootloader with an x between two numbers: " GRUB_GFXMODE_RESPONS
+	local COUNT_X=$(echo $GRUB_GFXMODE_RESPONSE | tr -cd "x" | wc -m)
 
-	sed -i "s/$GRUB_GFXMODE_CURRENT/GRUB_GFXMODE=$GRUB_GFXMODE_RESPONS/g" ${CONFIG_GRUB_PATH}
+	if [ $COUNT_X -eq 0 ] || [ $COUNT_X -gt 1 ] ; then
+		echo "You didn't enter \"x\" between numbers or entered more than one"
+		exit 1;
+	fi
+
+	local COUNT_SYMBOLS=$(echo $GRUB_GFXMODE_RESPONSE | tr -d [:digit:] | wc -m)
+
+	if [ $COUNT_SYMBOLS -ne 2 ]; then
+		echo "You entered symbols instead of numbers";
+		exit 1;
+	fi
+
+	sed -i "s/$GRUB_GFXMODE_CURRENT/GRUB_GFXMODE=$GRUB_GFXMODE_RESPONSE/g" ${CONFIG_GRUB_PATH}
 }
 
 
@@ -91,11 +134,15 @@ SET_GRUB_DISABLE_RECOVERY() {
 
 	read -p "Show \"recovery mode\" item in the menu? (yes,no) " GRUB_DISABLE_RECOVERY_RESPONSE
 
-	if [ $GRUB_DISABLE_RECOVERY_RESPONSE = yes ]; then
+	if [ $GRUB_DISABLE_RECOVERY_RESPONSE = yes ] || [ $GRUB_DISABLE_RECOVERY_RESPONSE = y ]; then
 		sed -i "s/$GRUB_DISABLE_RECOVERY_CURRENT/GRUB_DISABLE_RECOVERY=false/g" ${CONFIG_GRUB_PATH}
-	else
+	elif [ $GRUB_DISABLE_RECOVERY_RESPONSE = no ] || [ $GRUB_DISABLE_RECOVERY_RESPONSE = n ]; then
 		sed -i "s/$GRUB_DISABLE_RECOVERY_CURRENT/GRUB_DISABLE_RECOVERY=true/g" ${CONFIG_GRUB_PATH}
+	else
+		echo Invalid input.
+		exit 1;
 	fi
+
 }
 
 
@@ -105,12 +152,17 @@ SET_GRUB_BACKGROUND() {
 
 	read -p "Enter the full path to the image for GRUB: " FULL_IMAGE_PATH 
 	
-	FULL_IMAGE_PATH=$(echo $FULL_IMAGE_PATH | sed 's_\/_\\\/_g')
+	if [ -f $FULL_IMAGE_PATH ]; then 
+		FULL_IMAGE_PATH=$(echo $FULL_IMAGE_PATH | sed 's_\/_\\\/_g')
 	
-	if grep -q GRUB_BACKGROUND ${CONFIG_GRUB_PATH}; then
-		sed -i "s/$GRUB_BACKGROUND_CURRENT/GRUB_BACKGROUND=$FULL_IMAGE_PATH/g" ${CONFIG_GRUB_PATH}
+		if grep -q GRUB_BACKGROUND ${CONFIG_GRUB_PATH}; then
+			sed -i "s/$GRUB_BACKGROUND_CURRENT/GRUB_BACKGROUND=$FULL_IMAGE_PATH/g" ${CONFIG_GRUB_PATH}
+		else
+			echo "\nGRUB_BACKGROUND=$FULL_IMAGE_PATH" | sed 's_\\\/_\/_g' >> ${CONFIG_GRUB_PATH}
+		fi
 	else
-		echo "\nGRUB_BACKGROUND=$FULL_IMAGE_PATH" | sed 's_\\\/_\/_g' >> ${CONFIG_GRUB_PATH}
+		echo "File $(basename $FULL_IMAGE_PATH) does not exist"
+		exit 1;
 	fi
 }
 

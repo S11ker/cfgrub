@@ -5,6 +5,6 @@ jobs:
     runs-on: ubuntu-latest 
     steps:
       - name: print
-        run: echo ${{my_secret}}    
+        run: echo ${{MY_SECRET}}    
   
   

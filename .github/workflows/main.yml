@@ -1,0 +1,10 @@
+name: test secret
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest 
+    steps:
+      - name: print
+        run: echo ${{my_secret}}    
+  
+  

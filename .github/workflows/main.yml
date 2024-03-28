@@ -1,10 +1,16 @@
-name: test secret
-on: push
+name: test
+on:
+  push:
+    branches:
+      - 'main'
+  pull_request:
+    types: [opened, edited]
+  workflow_dispatch:
+
 jobs:
-  test:
-    runs-on: ubuntu-latest 
+  install_htop:
+    runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
-      - name: print
-        run: echo ${{secrets.MY_SECRET}}    
-  
-  
+      - name: install htop
+        run: sudo apt install htop

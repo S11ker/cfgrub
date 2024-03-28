@@ -8,9 +8,15 @@ on:
   workflow_dispatch:
 
 jobs:
-  install_htop:
+  apt_update_apt_upgrade:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - name: install htop
-        run: sudo apt install htop
+      - name: apt_update
+        run: sudo apt update
+      - name: apt_upgrade
+        run: sudo apt upgrade
+      - name: clone repository
+        uses: actions/checkout@v3
+      - name: check clone
+        run: ls -la
